@@ -288,6 +288,7 @@ set(src_renderer
 	renderer/VertexCache.cpp
 	renderer/draw_arb.cpp
 	renderer/draw_arb2.cpp
+	renderer/draw_glsl.cpp
 	renderer/draw_common.cpp
 	renderer/draw_nv10.cpp
 	renderer/draw_nv20.cpp

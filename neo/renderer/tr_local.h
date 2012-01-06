@@ -677,6 +677,7 @@ typedef enum {
 	BE_NV20,
 	BE_R200,
 	BE_ARB2,
+	BE_GLSL,
 	BE_BAD
 } backEndName_t;
 
@@ -835,7 +836,7 @@ extern idCVar r_flareSize;				// scale the flare deforms from the material def
 extern idCVar r_gamma;					// changes gamma tables
 extern idCVar r_brightness;				// changes gamma tables
 
-extern idCVar r_renderer;				// arb, nv10, nv20, r200, gl2, etc
+extern idCVar r_renderer;				// arb, nv10, nv20, r200, glsl, etc
 
 extern idCVar r_checkBounds;			// compare all surface bounds with precalculated ones
 
@@ -1291,7 +1292,11 @@ void	RB_NV20_DrawInteractions( void );
 void	R_ARB2_Init( void );
 void	RB_ARB2_DrawInteractions( void );
 void	R_ReloadARBPrograms_f( const idCmdArgs &args );
+void	R_ReloadGLSLPrograms_f( const idCmdArgs &args );
 int		R_FindARBProgram( GLenum target, const char *program );
+
+void	R_GLSL_Init( void );
+void	RB_GLSL_DrawInteractions( void );
 
 typedef enum {
 	PROG_INVALID,
@@ -1315,6 +1320,47 @@ typedef enum {
 	FPROG_GLASSWARP,
 	PROG_USER
 } program_t;
+
+struct shaderProgram_t {
+	GLhandleARB		program;					// program = vertex + fragment shader
+
+	GLhandleARB		vertexShader;
+	GLhandleARB		fragmentShader;
+
+	// uniform parameters
+	GLint			u_normalTexture;
+	GLint			u_lightFalloffTexture;
+	GLint			u_lightProjectionTexture;
+	GLint			u_diffuseTexture;
+	GLint			u_specularTexture;
+
+	GLint			modelMatrix;
+
+	GLint			localLightOrigin;
+	GLint			localViewOrigin;
+
+	GLint			lightProjectionS;
+	GLint			lightProjectionT;
+	GLint			lightProjectionQ;
+	GLint			lightFalloff;
+
+	GLint			bumpMatrixS;
+	GLint			bumpMatrixT;
+	GLint			diffuseMatrixS;
+	GLint			diffuseMatrixT;
+	GLint			specularMatrixS;
+	GLint			specularMatrixT;
+
+	GLint			colorModulate;
+	GLint			colorAdd;
+
+	GLint			diffuseColor;
+	GLint			specularColor;
+};
+
+extern shaderProgram_t  interactionShader;
+extern shaderProgram_t  ambientInteractionShader;
+extern shaderProgram_t	stencilShadowShader;
 
 /*
 

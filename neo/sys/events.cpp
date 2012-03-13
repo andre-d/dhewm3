@@ -34,8 +34,11 @@ If you have questions concerning this license or the applicable additional terms
 #include "framework/Common.h"
 #include "framework/KeyInput.h"
 #include "renderer/RenderSystem.h"
+#include "renderer/tr_local.h"
 
 #include "sys/sys_public.h"
+
+extern SDL_Window* window;
 
 const char *kbdNames[] = {
 	"english", "french", "german", "italian", "spanish", "turkish", NULL
@@ -73,8 +76,9 @@ struct mouse_poll_t {
 static idList<kbd_poll_t> kbd_polls;
 static idList<mouse_poll_t> mouse_polls;
 static bool grabbed = false;
+static bool backspaced = false;
 
-static byte mapkey(SDLKey key) {
+static byte mapkey(SDL_Keycode key) {
 	switch (key) {
 	case SDLK_BACKSPACE:
 		return K_BACKSPACE;
@@ -86,11 +90,11 @@ static byte mapkey(SDLKey key) {
 		return key & 0xff;
 
 	switch (key) {
-	case SDLK_COMPOSE:
+	case SDLK_APPLICATION:
 		return K_COMMAND;
 	case SDLK_CAPSLOCK:
 		return K_CAPSLOCK;
-	case SDLK_SCROLLOCK:
+	case SDLK_SCROLLLOCK:
 		return K_SCROLL;
 	case SDLK_POWER:
 		return K_POWER;
@@ -104,9 +108,9 @@ static byte mapkey(SDLKey key) {
 	case SDLK_RIGHT:
 		return K_RIGHTARROW;
 
-	case SDLK_LSUPER:
+	case SDLK_LGUI:
 		return K_LWIN;
-	case SDLK_RSUPER:
+	case SDLK_RGUI:
 		return K_RWIN;
 	case SDLK_MENU:
 		return K_MENU;
@@ -165,27 +169,27 @@ static byte mapkey(SDLKey key) {
 	case SDLK_F15:
 		return K_F15;
 
-	case SDLK_KP7:
+	case SDLK_KP_7:
 		return K_KP_HOME;
-	case SDLK_KP8:
+	case SDLK_KP_8:
 		return K_KP_UPARROW;
-	case SDLK_KP9:
+	case SDLK_KP_9:
 		return K_KP_PGUP;
-	case SDLK_KP4:
+	case SDLK_KP_4:
 		return K_KP_LEFTARROW;
-	case SDLK_KP5:
+	case SDLK_KP_5:
 		return K_KP_5;
-	case SDLK_KP6:
+	case SDLK_KP_6:
 		return K_KP_RIGHTARROW;
-	case SDLK_KP1:
+	case SDLK_KP_1:
 		return K_KP_END;
-	case SDLK_KP2:
+	case SDLK_KP_2:
 		return K_KP_DOWNARROW;
-	case SDLK_KP3:
+	case SDLK_KP_3:
 		return K_KP_PGDN;
 	case SDLK_KP_ENTER:
 		return K_KP_ENTER;
-	case SDLK_KP0:
+	case SDLK_KP_0:
 		return K_KP_INS;
 	case SDLK_KP_PERIOD:
 		return K_KP_DEL;
@@ -197,7 +201,7 @@ static byte mapkey(SDLKey key) {
 	// K_ACUTE_ACCENT;
 	case SDLK_KP_PLUS:
 		return K_KP_PLUS;
-	case SDLK_NUMLOCK:
+	case SDLK_NUMLOCKCLEAR:
 		return K_KP_NUMLOCK;
 	case SDLK_KP_MULTIPLY:
 		return K_KP_STAR;
@@ -229,7 +233,7 @@ static byte mapkey(SDLKey key) {
 	// K_AUX15;
 	// K_AUX16;
 
-	case SDLK_PRINT:
+	case SDLK_PRINTSCREEN:
 		return K_PRINT_SCR;
 	case SDLK_MODE:
 		return K_RIGHT_ALT;
@@ -246,35 +250,49 @@ static void PushConsoleEvent(const char *s) {
 	b = (char *)Mem_Alloc(len);
 	strcpy(b, s);
 
-	SDL_Event event;
+	SDL_Event* event = (SDL_Event*)malloc(sizeof(SDL_Event));
 
-	event.type = SDL_USEREVENT;
-	event.user.code = SE_CONSOLE;
-	event.user.data1 = (void *)len;
-	event.user.data2 = b;
+	event->type = SDL_USEREVENT;
+	event->user.code = SE_CONSOLE;
+	event->user.data1 = (void *)len;
+	event->user.data2 = b;
 
-	SDL_PushEvent(&event);
+	SDL_PushEvent(event);
+}
+
+static bool IsCenterMouse(int x, int y) {
+	return (x==glConfig.vidWidth/2) && (y==glConfig.vidHeight/2);
+}
+
+static void MoveMouseCenter() {
+	SDL_WarpMouseInWindow(window, (glConfig.vidWidth/2),(glConfig.vidHeight/2)); 
 }
 
 static void GrabInput(bool grab, bool hide_cursor, bool set_state) {
 #if defined(ID_DEDICATED)
 	return;
 #else
-	if (set_state)
+	
+	if (in_nograb.GetBool())
+		grab = false;
+	
+	if (set_state) {
+		if(grab != grabbed) {
+			MoveMouseCenter();
+		}
 		grabbed = grab;
+	}
 
 	if (hide_cursor)
 		SDL_ShowCursor(SDL_DISABLE);
 	else
 		SDL_ShowCursor(SDL_ENABLE);
 
-	if (in_nograb.GetBool())
-		grab = false;
-
-	if (grab)
-		SDL_WM_GrabInput(SDL_GRAB_ON);
-	else
-		SDL_WM_GrabInput(SDL_GRAB_OFF);
+	if (grab) {
+		SDL_SetWindowGrab(window, SDL_TRUE);
+	} else {
+		SDL_SetWindowGrab(window, SDL_FALSE);
+	}
 #endif
 }
 
@@ -286,11 +304,8 @@ Sys_InitInput
 void Sys_InitInput() {
 	kbd_polls.SetGranularity(64);
 	mouse_polls.SetGranularity(64);
-
-	SDL_EnableUNICODE(1);
-	SDL_EnableKeyRepeat(SDL_DEFAULT_REPEAT_DELAY, SDL_DEFAULT_REPEAT_INTERVAL);
-
 	in_kbd.SetModified();
+	GrabInput(true, true, true);
 }
 
 /*
@@ -365,7 +380,7 @@ Sys_GrabMouseCursor
 ===============
 */
 void Sys_GrabMouseCursor(bool grabIt) {
-	GrabInput(grabIt, grabIt, true);
+	GrabInput(grabIt, true, true);
 }
 
 /*
@@ -379,26 +394,27 @@ sysEvent_t Sys_GetEvent() {
 	byte key;
 
 	static const sysEvent_t res_none = { SE_NONE, 0, 0, 0, NULL };
-	static byte c = 0;
-
-	if (c) {
-		res.evType = SE_CHAR;
-		res.evValue = c;
-
-		c = 0;
-
-		return res;
-	}
 
 	if (SDL_PollEvent(&ev)) {
 		switch (ev.type) {
-		case SDL_ACTIVEEVENT:
-			GrabInput(grabbed && ev.active.gain == 1, ev.active.gain == 1, false);
+		case SDL_WINDOWEVENT:
+			switch (ev.window.event) {
+				case SDL_WINDOWEVENT_FOCUS_GAINED:
+					GrabInput(grabbed, true, true);
+				case SDL_WINDOWEVENT_FOCUS_LOST:
+					GrabInput(false, false, false);
+			}
 			return res_none;
-
-		case SDL_VIDEOEXPOSE:
-			return res_none;
-
+		
+		case SDL_TEXTINPUT:
+			if(!ev.text.text)
+				return res_none;
+			res.evType = SE_CHAR;
+			res.evPtr = (void*)(Mem_ClearedAlloc((strlen(ev.text.text)+1)));
+			strcpy((char*)res.evPtr, ev.text.text);
+			res.evValue = (ev.text.text[0]); // Compat
+			return res;
+		
 		case SDL_KEYDOWN:
 			if (ev.key.keysym.sym == SDLK_RETURN && (ev.key.keysym.mod & KMOD_ALT) > 0) {
 				cvarSystem->SetCVarBool("r_fullscreen", !renderSystem->IsFullScreen());
@@ -409,8 +425,8 @@ sysEvent_t Sys_GetEvent() {
 			// fall through
 		case SDL_KEYUP:
 			key = mapkey(ev.key.keysym.sym);
-
-			if (!key) {
+			
+			if (!key && ev.key.keysym.unicode) {
 				unsigned char c;
 
 				// check if its an unmapped console key
@@ -424,6 +440,17 @@ sysEvent_t Sys_GetEvent() {
 					return res_none;
 				}
 			}
+			
+			if (!backspaced && key == K_BACKSPACE && ev.key.state == SDL_PRESSED) {
+				SDL_Event* temp = (SDL_Event*)malloc(sizeof(SDL_Event));
+				memset(temp, 0x0, sizeof(SDL_Event));
+				temp->type = SDL_TEXTINPUT;
+				temp->text.text[0] = key;
+				SDL_PushEvent(temp);
+				// Because the backspace event has to come through here, it fires really rapidly,
+				//     thus, we rate limit it to once per poll.
+				backspaced = true;
+			}
 
 			res.evType = SE_KEY;
 			res.evValue = key;
@@ -431,19 +458,19 @@ sysEvent_t Sys_GetEvent() {
 
 			kbd_polls.Append(kbd_poll_t(key, ev.key.state == SDL_PRESSED));
 
-			if (ev.key.state == SDL_PRESSED && (ev.key.keysym.unicode & 0xff00) == 0)
-				c = ev.key.keysym.unicode & 0xff;
-
 			return res;
 
 		case SDL_MOUSEMOTION:
 			res.evType = SE_MOUSE;
-			res.evValue = ev.motion.xrel;
-			res.evValue2 = ev.motion.yrel;
-
-			mouse_polls.Append(mouse_poll_t(M_DELTAX, ev.motion.xrel));
-			mouse_polls.Append(mouse_poll_t(M_DELTAY, ev.motion.yrel));
-
+			if (!IsCenterMouse(ev.motion.x, ev.motion.y)) {
+				if(SDL_GetWindowGrab(window)) {
+					MoveMouseCenter();
+				}
+				res.evValue = ev.motion.xrel;
+				res.evValue2 = ev.motion.yrel;
+				mouse_polls.Append(mouse_poll_t(M_DELTAX, ev.motion.xrel));
+				mouse_polls.Append(mouse_poll_t(M_DELTAY, ev.motion.yrel));
+			}
 			return res;
 
 		case SDL_MOUSEBUTTONDOWN:
@@ -463,20 +490,22 @@ sysEvent_t Sys_GetEvent() {
 				res.evValue = K_MOUSE2;
 				mouse_polls.Append(mouse_poll_t(M_ACTION2, ev.button.state == SDL_PRESSED ? 1 : 0));
 				break;
-			case SDL_BUTTON_WHEELUP:
+			}
+			
+			res.evValue2 = ev.button.state == SDL_PRESSED ? 1 : 0;
+			return res;
+		case SDL_MOUSEWHEEL:
+			if (ev.wheel.y > 0) {
 				res.evValue = K_MWHEELUP;
-				if (ev.button.state == SDL_PRESSED)
-					mouse_polls.Append(mouse_poll_t(M_DELTAZ, 1));
-				break;
-			case SDL_BUTTON_WHEELDOWN:
+				mouse_polls.Append(mouse_poll_t(M_DELTAZ, 1));
+			} else if (ev.wheel.y < 0) {
 				res.evValue = K_MWHEELDOWN;
-				if (ev.button.state == SDL_PRESSED)
-					mouse_polls.Append(mouse_poll_t(M_DELTAZ, -1));
+				mouse_polls.Append(mouse_poll_t(M_DELTAZ, -1));
+			} else {
 				break;
 			}
-
-			res.evValue2 = ev.button.state == SDL_PRESSED ? 1 : 0;
-
+			res.evType = SE_KEY;
+			res.evValue2 = 1;
 			return res;
 
 		case SDL_QUIT:
@@ -561,6 +590,7 @@ Sys_EndKeyboardInputEvents
 ================
 */
 void Sys_EndKeyboardInputEvents() {
+	backspaced = false;
 	kbd_polls.SetNum(0, false);
 }
 

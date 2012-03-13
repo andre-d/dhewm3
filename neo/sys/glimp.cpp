@@ -39,6 +39,8 @@ If you have questions concerning this license or the applicable additional terms
 #include "sys/win32/win_local.h"
 #endif
 
+SDL_Window* window = NULL;
+
 /*
 ===================
 GLimp_Init
@@ -49,12 +51,10 @@ bool GLimp_Init(glimpParms_t parms) {
 
 	assert(SDL_WasInit(SDL_INIT_VIDEO));
 
-	Uint32 flags = SDL_OPENGL;
+	Uint32 flags = SDL_WINDOW_OPENGL;
 
 	if (parms.fullScreen)
-		flags |= SDL_FULLSCREEN;
-
-	SDL_Surface *surf = NULL;
+		flags |= SDL_WINDOW_FULLSCREEN;
 
 	int colorbits = 24;
 	int depthbits = 24;
@@ -117,8 +117,6 @@ bool GLimp_Init(glimpParms_t parms) {
 		if (tcolorbits == 24)
 			channelcolorbits = 8;
 
-		SDL_WM_SetCaption(GAME_NAME, GAME_NAME);
-
 		SDL_GL_SetAttribute(SDL_GL_RED_SIZE, channelcolorbits);
 		SDL_GL_SetAttribute(SDL_GL_GREEN_SIZE, channelcolorbits);
 		SDL_GL_SetAttribute(SDL_GL_BLUE_SIZE, channelcolorbits);
@@ -131,16 +129,21 @@ bool GLimp_Init(glimpParms_t parms) {
 
 		SDL_GL_SetAttribute(SDL_GL_MULTISAMPLEBUFFERS, parms.multiSamples ? 1 : 0);
 		SDL_GL_SetAttribute(SDL_GL_MULTISAMPLESAMPLES, parms.multiSamples);
-
-		if (SDL_GL_SetAttribute(SDL_GL_SWAP_CONTROL, r_swapInterval.GetInteger()) < 0)
-			common->Warning("SDL_GL_SWAP_CONTROL not supported");
-
-		surf = SDL_SetVideoMode(parms.width, parms.height, colorbits, flags);
-		if (!surf) {
+		
+		if (window) {
+			SDL_DestroyWindow(window);
+		}
+		window = SDL_CreateWindow(GAME_NAME, SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, parms.width, parms.height, flags);
+		SDL_GL_CreateContext(window);
+		
+		if (!window) {
 			common->DPrintf("Couldn't set GL mode %d/%d/%d: %s",
 							channelcolorbits, tdepthbits, tstencilbits, SDL_GetError());
 			continue;
 		}
+		
+		if (SDL_GL_SetSwapInterval(r_swapInterval.GetInteger()) < 0)
+			common->Warning("SDL_GL_SWAP_CONTROL not supported");
 
 		common->Printf("Using %d color bits, %d depth, %d stencil display\n",
 						channelcolorbits, tdepthbits, tstencilbits);
@@ -148,17 +151,16 @@ bool GLimp_Init(glimpParms_t parms) {
 		glConfig.colorBits = tcolorbits;
 		glConfig.depthBits = tdepthbits;
 		glConfig.stencilBits = tstencilbits;
+		
+		SDL_GetWindowSize(window, &(glConfig.vidWidth), &(glConfig.vidHeight));
 
-		glConfig.vidWidth = surf->w;
-		glConfig.vidHeight = surf->h;
-
-		glConfig.isFullscreen = (surf->flags & SDL_FULLSCREEN) == SDL_FULLSCREEN;
+		glConfig.isFullscreen = (SDL_GetWindowFlags(window) & SDL_WINDOW_FULLSCREEN) == SDL_WINDOW_FULLSCREEN;
 		glConfig.displayFrequency = 0;
 
 		break;
 	}
 
-	if (!surf) {
+	if (!window) {
 		common->Warning("No usable GL mode found: %s", SDL_GetError());
 		return false;
 	}
@@ -212,7 +214,7 @@ GLimp_SwapBuffers
 ===================
 */
 void GLimp_SwapBuffers() {
-	SDL_GL_SwapBuffers();
+	SDL_GL_SwapWindow(window);
 }
 
 /*
@@ -221,7 +223,7 @@ GLimp_SetGamma
 =================
 */
 void GLimp_SetGamma(unsigned short red[256], unsigned short green[256], unsigned short blue[256]) {
-	if (SDL_SetGammaRamp(red, green, blue))
+	if (SDL_SetWindowGammaRamp(window, red, green, blue))
 		common->Warning("Couldn't set gamma ramp: %s", SDL_GetError());
 }
 

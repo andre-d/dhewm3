@@ -105,8 +105,8 @@ include_directories(${OPENAL_INCLUDE_DIR})
 find_package(OpenGL REQUIRED)
 include_directories(${OPENGL_INCLUDE_DIR})
 
-find_package(SDL REQUIRED)
-include_directories(${SDL_INCLUDE_DIR})
+add_definitions(`sdl2-config --cflags`)
+link_libraries(SDL2)
 
 find_package(CURL QUIET)
 if (CURL_FOUND)

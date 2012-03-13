@@ -109,7 +109,7 @@ void Sys_ShutdownThreads() {
 			continue;
 
 		Sys_Printf("WARNING: Thread '%s' still running\n", thread[i]->name);
-		SDL_KillThread(thread[i]->threadHandle);
+		//SDL_KillThread(thread[i]->threadHandle); // TODO: Tell the thread you wanna kill it
 		thread[i] = NULL;
 	}
 
@@ -218,7 +218,7 @@ Sys_CreateThread
 void Sys_CreateThread(xthread_t function, void *parms, xthreadInfo& info, const char *name) {
 	Sys_EnterCriticalSection();
 
-	SDL_Thread *t = SDL_CreateThread(function, parms);
+	SDL_Thread *t = SDL_CreateThread(function, "id", parms);
 
 	if (!t) {
 		common->Error("ERROR: SDL_thread for '%s' failed\n", name);
@@ -257,6 +257,7 @@ void Sys_DestroyThread(xthreadInfo& info) {
 	for (int i = 0; i < thread_count; i++) {
 		if (&info == thread[i]) {
 			thread[i] = NULL;
+			common->Warning("Warning, thread not killed!");
 
 			int j;
 			for (j = i + 1; j < thread_count; j++)

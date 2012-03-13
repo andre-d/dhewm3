@@ -797,9 +797,12 @@ bool	idConsoleLocal::ProcessEvent( const sysEvent_t *event, bool forceAccept ) {
 
 	// handle key and character events
 	if ( event->evType == SE_CHAR ) {
-		// never send the console key as a character
-		if ( event->evValue != Sys_GetConsoleKey( false ) && event->evValue != Sys_GetConsoleKey( true ) ) {
-			consoleField.CharEvent( event->evValue );
+		for(int i=0; i<strlen((char*)event->evPtr); i++) {
+			int val = ((char*)event->evPtr)[i];
+			// never send the console key as a character
+			if ( val != Sys_GetConsoleKey( false ) && val != Sys_GetConsoleKey( true ) ) {
+				consoleField.CharEvent( val );
+			}
 		}
 		return true;
 	}
